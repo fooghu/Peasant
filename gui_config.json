@@ -1,0 +1,9 @@
+{
+  "pool": "https://www.ramses.xyz/liquidity/0xc5ce1f3aae5744271e228256a0bead5f4ab1cbe0?chainId=4663&poolType=dlmm",
+  "min_bin": "8383429",
+  "max_bin": "8383445",
+  "interval": "3 minutes",
+  "rpc": "https://rpc.mainnet.chain.robinhood.com",
+  "token": "8938330905:AAGkBLrIWLbl24O_3z9H_qmLtlzFrN-RXw4",
+  "chat": "1494018269"
+}
