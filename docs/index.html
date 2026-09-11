@@ -125,15 +125,100 @@
     padding: 40px;
     grid-column: 1 / -1;
   }
+  .btn {
+    background: #2a3142;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .btn:hover { background: #333c50; }
+  .btn-ghost { background: transparent; }
+  .btn-remove {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.68rem;
+    cursor: pointer;
+  }
+  .btn-remove:hover { color: var(--danger); border-color: var(--danger); }
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10;
+    padding: 16px;
+  }
+  .modal {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    width: 100%;
+    max-width: 420px;
+  }
+  .modal h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  .modal label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin: 10px 0 4px;
+  }
+  .modal input, .modal select {
+    width: 100%;
+    background: #1c2330;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 0.9rem;
+  }
+  .modal .hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .modal-msg {
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    min-height: 1.2em;
+  }
 </style>
 </head>
 <body>
   <header>
     <h1>Position Monitor</h1>
-    <div class="updated" id="updated">Loading...</div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div class="updated" id="updated">Loading...</div>
+      <button class="btn" id="addBtn">+ Add Position</button>
+      <button class="btn btn-ghost" id="tokenBtn">Token</button>
+    </div>
   </header>
   <div class="grid" id="grid">
     <div class="empty">Loading positions...</div>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop" style="display:none;">
+    <div class="modal">
+      <h2 id="modalTitle">Add Position</h2>
+      <div id="modalBody"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+        <button class="btn" id="modalSubmit">Save</button>
+      </div>
+      <div id="modalMsg" class="modal-msg"></div>
+    </div>
   </div>
 
   <script>
@@ -143,10 +228,63 @@
       out_of_range: 'var(--danger)',
     };
 
+    // Derived from the Pages URL itself: https://<owner>.github.io/<repo>/
+    const REPO_OWNER = location.hostname.split('.')[0];
+    const REPO_NAME = location.pathname.split('/').filter(Boolean)[0];
+    const WORKFLOW_FILE = 'check-positions.yml';
+
+    function getToken() { return localStorage.getItem('gh_pat') || ''; }
+    function setToken(t) { localStorage.setItem('gh_pat', t); }
+
+    function b64EncodeUnicode(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+    function b64DecodeUnicode(str) {
+      return decodeURIComponent(escape(atob(str)));
+    }
+
+    async function ghRequest(path, options = {}) {
+      const token = getToken();
+      if (!token) throw new Error('No GitHub token set. Click "Token" first.');
+      const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}${path}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          ...(options.headers || {}),
+        },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `GitHub API error ${res.status}`);
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    async function getConfig() {
+      const file = await ghRequest('/contents/config.json');
+      return { config: JSON.parse(b64DecodeUnicode(file.content)), sha: file.sha };
+    }
+
+    async function putConfig(config, sha, message) {
+      await ghRequest('/contents/config.json', {
+        method: 'PUT',
+        body: JSON.stringify({ message, content: b64EncodeUnicode(JSON.stringify(config, null, 2)), sha }),
+      });
+    }
+
+    async function triggerWorkflow() {
+      try {
+        await ghRequest(`/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+          method: 'POST',
+          body: JSON.stringify({ ref: 'main' }),
+        });
+      } catch (e) { /* best-effort -- next scheduled run will pick it up regardless */ }
+    }
+
     function clampPercent(value, low, high) {
       if (high === low) return 50;
-      const pct = ((value - low) / (high - low)) * 100;
-      return Math.max(0, Math.min(100, pct));
+      return Math.max(0, Math.min(100, ((value - low) / (high - low)) * 100));
     }
 
     function renderCard(pos) {
@@ -167,7 +305,10 @@
                 <span class="badge">${pos.type}</span>
               </div>
             </div>
-            <span class="status-pill status-${pos.state}">${pos.state.replace(/_/g, ' ')}</span>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+              <span class="status-pill status-${pos.state}">${pos.state.replace(/_/g, ' ')}</span>
+              <button class="btn-remove" data-remove="${pos.name}">Remove</button>
+            </div>
           </div>
           <div class="range-track">
             <div class="range-marker" style="left:${pct}%; background:${color};"></div>
@@ -182,21 +323,117 @@
       `;
     }
 
-    fetch('./data.json?t=' + Date.now())
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('updated').textContent = 'Updated: ' + data.updated_at;
-        const grid = document.getElementById('grid');
-        if (!data.positions || data.positions.length === 0) {
-          grid.innerHTML = '<div class="empty">No positions configured yet.</div>';
+    function loadDashboard() {
+      fetch('./data.json?t=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('updated').textContent = 'Updated: ' + data.updated_at;
+          const grid = document.getElementById('grid');
+          if (!data.positions || data.positions.length === 0) {
+            grid.innerHTML = '<div class="empty">No positions configured yet. Click "+ Add Position" to add one.</div>';
+            return;
+          }
+          grid.innerHTML = data.positions.map(renderCard).join('');
+          grid.querySelectorAll('[data-remove]').forEach(btn => {
+            btn.addEventListener('click', () => onRemove(btn.getAttribute('data-remove')));
+          });
+        })
+        .catch(() => {
+          document.getElementById('grid').innerHTML =
+            '<div class="empty">Could not load data.json yet — it appears after the first workflow run.</div>';
+        });
+    }
+
+    // ---- Modal handling ----
+    const backdrop = document.getElementById('modalBackdrop');
+    const modalBody = document.getElementById('modalBody');
+    const modalMsg = document.getElementById('modalMsg');
+
+    function closeModal() { backdrop.style.display = 'none'; modalMsg.textContent = ''; }
+    document.getElementById('modalCancel').addEventListener('click', closeModal);
+
+    document.getElementById('tokenBtn').addEventListener('click', () => {
+      document.getElementById('modalTitle').textContent = 'GitHub Token';
+      modalBody.innerHTML = `
+        <p class="hint">Fine-grained token, scoped only to this repo, with Contents
+        (read/write) and Actions (read/write) permissions. Stored only in this
+        browser's local storage -- never committed anywhere.</p>
+        <input type="password" id="tokenInput" placeholder="github_pat_..." value="${getToken()}">
+      `;
+      document.getElementById('modalSubmit').onclick = () => {
+        setToken(document.getElementById('tokenInput').value.trim());
+        closeModal();
+      };
+      backdrop.style.display = 'flex';
+    });
+
+    document.getElementById('addBtn').addEventListener('click', () => {
+      document.getElementById('modalTitle').textContent = 'Add Position';
+      modalBody.innerHTML = `
+        <label>Name</label>
+        <input id="f_name" placeholder="e.g. TENDIES/USDG">
+        <label>Chain</label>
+        <select id="f_chain"><option value="robinhood">robinhood</option><option value="hyperevm">hyperevm</option></select>
+        <label>Type</label>
+        <select id="f_type"><option value="dlmm">dlmm</option><option value="cl">cl</option></select>
+        <label>Pool address</label>
+        <input id="f_pool" placeholder="0x...">
+        <div id="f_range"></div>
+      `;
+      const renderRangeFields = () => {
+        const type = document.getElementById('f_type').value;
+        document.getElementById('f_range').innerHTML = type === 'dlmm'
+          ? `<label>Min bin</label><input id="f_low" type="number"><label>Max bin</label><input id="f_high" type="number">`
+          : `<label>Tick lower</label><input id="f_low" type="number"><label>Tick upper</label><input id="f_high" type="number">`;
+      };
+      document.getElementById('f_type').addEventListener('change', renderRangeFields);
+      renderRangeFields();
+
+      document.getElementById('modalSubmit').onclick = async () => {
+        const name = document.getElementById('f_name').value.trim();
+        const chain = document.getElementById('f_chain').value;
+        const type = document.getElementById('f_type').value;
+        const pool_address = document.getElementById('f_pool').value.trim();
+        const low = parseInt(document.getElementById('f_low').value, 10);
+        const high = parseInt(document.getElementById('f_high').value, 10);
+        if (!name || !pool_address || isNaN(low) || isNaN(high)) {
+          modalMsg.textContent = 'Fill in every field.';
           return;
         }
-        grid.innerHTML = data.positions.map(renderCard).join('');
-      })
-      .catch(err => {
-        document.getElementById('grid').innerHTML =
-          '<div class="empty">Could not load data.json yet — it appears after the first workflow run.</div>';
-      });
+        const newPos = { name, chain, type, pool_address, early_warning_fraction: 0.7 };
+        if (type === 'dlmm') { newPos.min_bin = low; newPos.max_bin = high; }
+        else { newPos.tick_lower = low; newPos.tick_upper = high; }
+
+        modalMsg.textContent = 'Saving...';
+        try {
+          const { config, sha } = await getConfig();
+          config.positions.push(newPos);
+          await putConfig(config, sha, `Add position: ${name}`);
+          await triggerWorkflow();
+          modalMsg.textContent = 'Saved. Check runs every 5 min, or refresh in ~30s.';
+          setTimeout(() => { closeModal(); loadDashboard(); }, 1500);
+        } catch (e) {
+          modalMsg.textContent = 'Error: ' + e.message;
+        }
+      };
+      backdrop.style.display = 'flex';
+    });
+
+    async function onRemove(name) {
+      if (!confirm(`Remove ${name} from monitoring?`)) return;
+      try {
+        const { config, sha } = await getConfig();
+        config.positions = config.positions.filter(p => p.name !== name);
+        await putConfig(config, sha, `Remove position: ${name}`);
+        await triggerWorkflow();
+        loadDashboard();
+      } catch (e) {
+        alert('Error: ' + e.message + '\n\nMake sure your token is set (click "Token").');
+      }
+    }
+
+    loadDashboard();
   </script>
+
 </body>
 </html>
