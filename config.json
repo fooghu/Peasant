@@ -11,15 +11,6 @@
   },
   "positions": [
     {
-      "name": "FRONG/WETH",
-      "chain": "robinhood",
-      "type": "dlmm",
-      "pool_address": "0xc5ce1f3aae5744271e228256a0bead5f4ab1cbe0",
-      "min_bin": 8383438,
-      "max_bin": 8383445,
-      "early_warning_fraction": 0.7
-    },
-    {
       "name": "PONS/USDG",
       "chain": "robinhood",
       "type": "cl",
