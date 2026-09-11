@@ -54,6 +54,15 @@
       "early_warning_fraction": 0.7,
       "tick_lower": 0,
       "tick_upper": 0
+    },
+    {
+      "name": "PONS/USDG",
+      "chain": "robinhood",
+      "type": "cl",
+      "pool_address": "0xf2A0bE59AB76b96f957bd5E5b967F2B75e8dB269",
+      "early_warning_fraction": 0.7,
+      "tick_lower": 0,
+      "tick_upper": 0
     }
   ]
 }
