@@ -1,0 +1,23 @@
+{
+  "chains": {
+    "robinhood": {
+      "rpc_url": "https://rpc.mainnet.chain.robinhood.com",
+      "chain_id": 4663
+    },
+    "hyperevm": {
+      "rpc_url": "https://rpc.hyperliquid.xyz/evm",
+      "chain_id": 999
+    }
+  },
+  "positions": [
+    {
+      "name": "FRONG/WETH",
+      "chain": "robinhood",
+      "type": "dlmm",
+      "pool_address": "0xc5ce1f3aae5744271e228256a0bead5f4ab1cbe0",
+      "min_bin": 8383438,
+      "max_bin": 8383445,
+      "early_warning_fraction": 0.7
+    }
+  ]
+}

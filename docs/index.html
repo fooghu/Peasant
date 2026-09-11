@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Position Monitor</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --card-bg: #131820;
+    --border: #232a36;
+    --text: #e6e9ef;
+    --muted: #8b94a3;
+    --safe: #3ecf72;
+    --warning: #e8b93e;
+    --danger: #e8543e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 20px;
+  }
+  header {
+    max-width: 1100px;
+    margin: 0 auto 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  h1 { font-size: 1.3rem; margin: 0; }
+  .updated { color: var(--muted); font-size: 0.85rem; }
+  .grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .pos-name { font-weight: 600; font-size: 1.05rem; }
+  .badges { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #1c2330;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .status-pill {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    height: fit-content;
+  }
+  .status-safe { background: rgba(62,207,114,0.15); color: var(--safe); }
+  .status-warning { background: rgba(232,185,62,0.15); color: var(--warning); }
+  .status-out_of_range { background: rgba(232,84,62,0.15); color: var(--danger); }
+
+  .range-track {
+    position: relative;
+    height: 10px;
+    background: #1c2330;
+    border-radius: 6px;
+    margin: 16px 0 6px;
+  }
+  .range-marker {
+    position: absolute;
+    top: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid var(--bg);
+    transform: translateX(-50%);
+  }
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .stats {
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .stats b { color: var(--text); }
+
+  .history {
+    display: flex;
+    gap: 2px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .history-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px;
+    grid-column: 1 / -1;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Position Monitor</h1>
+    <div class="updated" id="updated">Loading...</div>
+  </header>
+  <div class="grid" id="grid">
+    <div class="empty">Loading positions...</div>
+  </div>
+
+  <script>
+    const statusColor = {
+      safe: 'var(--safe)',
+      warning: 'var(--warning)',
+      out_of_range: 'var(--danger)',
+    };
+
+    function clampPercent(value, low, high) {
+      if (high === low) return 50;
+      const pct = ((value - low) / (high - low)) * 100;
+      return Math.max(0, Math.min(100, pct));
+    }
+
+    function renderCard(pos) {
+      const pct = clampPercent(pos.value, pos.low, pos.high);
+      const color = statusColor[pos.state] || 'var(--muted)';
+      const history = (pos.history || []).slice(-24);
+      const historyDots = history.map(h =>
+        `<div class="history-dot" style="background:${statusColor[h.state] || '#2a3142'}"></div>`
+      ).join('');
+
+      return `
+        <div class="card">
+          <div class="card-top">
+            <div>
+              <div class="pos-name">${pos.name}</div>
+              <div class="badges">
+                <span class="badge">${pos.chain}</span>
+                <span class="badge">${pos.type}</span>
+              </div>
+            </div>
+            <span class="status-pill status-${pos.state}">${pos.state.replace(/_/g, ' ')}</span>
+          </div>
+          <div class="range-track">
+            <div class="range-marker" style="left:${pct}%; background:${color};"></div>
+          </div>
+          <div class="range-labels">
+            <span>${pos.low}</span>
+            <span>${pos.high}</span>
+          </div>
+          <div class="stats">Current: <b>${pos.value}</b></div>
+          <div class="history">${historyDots}</div>
+        </div>
+      `;
+    }
+
+    fetch('./data.json?t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('updated').textContent = 'Updated: ' + data.updated_at;
+        const grid = document.getElementById('grid');
+        if (!data.positions || data.positions.length === 0) {
+          grid.innerHTML = '<div class="empty">No positions configured yet.</div>';
+          return;
+        }
+        grid.innerHTML = data.positions.map(renderCard).join('');
+      })
+      .catch(err => {
+        document.getElementById('grid').innerHTML =
+          '<div class="empty">Could not load data.json yet — it appears after the first workflow run.</div>';
+      });
+  </script>
+</body>
+</html>
