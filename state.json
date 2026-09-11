@@ -7,8 +7,17 @@
           "timestamp": "2026-09-11 20:10:48",
           "value": 8383445,
           "state": "warning"
+        },
+        {
+          "timestamp": "2026-09-11 20:40:19",
+          "value": 8383445,
+          "state": "warning"
         }
       ]
+    },
+    "PONS/USDG": {
+      "last_state": "unknown",
+      "history": []
     }
   }
 }
