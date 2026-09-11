@@ -27,6 +27,15 @@
       "early_warning_fraction": 0.7,
       "min_bin": 0,
       "max_bin": 0
+    },
+    {
+      "name": "PONS/USDG",
+      "chain": "robinhood",
+      "type": "dlmm",
+      "pool_address": "0xf2A0bE59AB76b96f957bd5E5b967F2B75e8dB269",
+      "early_warning_fraction": 0.7,
+      "min_bin": 123,
+      "max_bin": 123
     }
   ]
 }
